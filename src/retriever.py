@@ -94,8 +94,8 @@ class MPRetriever:
                 "formation_energy_per_atom": doc.formation_energy_per_atom,
                 "energy_above_hull": getattr(doc, "energy_above_hull", None),
                 "band_gap": doc.band_gap,
-                "space_group": doc.space_group,
-                "crystal_system": getattr(doc, "crystal_system", ""),
+                "space_group": getattr(doc.symmetry, "symbol", "") if doc.symmetry else "",
+                "crystal_system": str(doc.symmetry.crystal_system) if doc.symmetry else "",
                 "n_sites": getattr(doc, "nsites", None),
                 "structure_data": doc.structure.as_dict(),
             })

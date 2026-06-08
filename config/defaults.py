@@ -8,7 +8,7 @@ DEFAULT_MAX_CANDIDATES = 50
 DEFAULT_FIELDS = [
     "material_id", "formula_pretty", "formation_energy_per_atom",
     "energy_above_hull", "band_gap", "structure",
-    "space_group", "crystal_system", "nsites"
+    "symmetry", "nsites"
 ]
 
 # Slab generation defaults

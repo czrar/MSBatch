@@ -42,8 +42,8 @@ def make_mock_doc(material_id, formula, energy_above_hull, structure_dict):
     doc.formation_energy_per_atom = -1.85
     doc.energy_above_hull = energy_above_hull
     doc.band_gap = 3.2
-    doc.space_group = "R-3m"
-    doc.crystal_system = "trigonal"
+    doc.symmetry.symbol = "R-3m"
+    doc.symmetry.crystal_system = "trigonal"
     doc.nsites = 4
     doc.structure.as_dict.return_value = structure_dict
     return doc
