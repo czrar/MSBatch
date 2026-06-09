@@ -7,6 +7,17 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 from PIL import Image
 
+# Prevent dask "cannot schedule new futures after shutdown" when running
+# multiple simulations sequentially.  'threads' scheduler uses a persistent
+# pool.  Limit workers to keep CPU usage reasonable.
+import dask.config
+dask.config.set(scheduler='threads')
+
+import os
+os.environ.setdefault('OMP_NUM_THREADS', '2')
+os.environ.setdefault('MKL_NUM_THREADS', '2')
+os.environ.setdefault('NUMBA_NUM_THREADS', '2')
+
 from config.defaults import SIM_CONFIG
 
 
