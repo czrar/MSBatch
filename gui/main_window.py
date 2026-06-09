@@ -68,6 +68,7 @@ class MSBatchMainWindow(QMainWindow):
     def _connect_signals(self):
         self.sidebar.retrieve_clicked.connect(self._on_retrieve)
         self.sidebar.simulate_clicked.connect(self._on_simulate)
+        self.sidebar.cancel_clicked.connect(self._on_cancel)
         self.sidebar.advanced_clicked.connect(self._on_advanced_settings)
         self.sidebar.experiment_image_dropped.connect(
             self.comparison_view.set_experimental_image
@@ -173,9 +174,7 @@ class MSBatchMainWindow(QMainWindow):
     def _on_show_structure(self, material_id, structure_data):
         if not structure_data:
             return
-        viewer = StructureViewer(self)
-        viewer.setWindowTitle(f"Structure: {material_id}")
-        viewer.load_structure(structure_data)
+        viewer = StructureViewer(material_id, structure_data, self)
         viewer.show()
 
     def _on_selection_changed(self):
@@ -200,6 +199,14 @@ class MSBatchMainWindow(QMainWindow):
                        experimental_image=self.comparison_view.experimental_path)
             self.status_bar.showMessage(f"Report saved to {path}", 5000)
             QMessageBox.information(self, "Done", f"Report saved:\n{path}")
+
+    def _on_cancel(self):
+        if hasattr(self, "_sim_worker") and self._sim_worker.isRunning():
+            self._sim_worker.requestInterruption()
+            self._sim_worker.quit()
+            self._sim_worker.wait(3000)
+        self.sidebar.set_simulating(False)
+        self.status_bar.showMessage("Simulation cancelled")
 
     def _on_error(self, msg):
         self.sidebar.set_retrieving(False)

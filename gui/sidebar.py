@@ -81,6 +81,7 @@ class Sidebar(QWidget):
 
     retrieve_clicked = pyqtSignal(dict)
     simulate_clicked = pyqtSignal()
+    cancel_clicked = pyqtSignal()
     advanced_clicked = pyqtSignal()
     experiment_image_dropped = pyqtSignal(str)
 
@@ -152,6 +153,12 @@ class Sidebar(QWidget):
             "QPushButton:disabled { background-color: #ccc; }"
         )
         s3.addWidget(self.simulate_btn)
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.clicked.connect(self.cancel_clicked.emit)
+        self.cancel_btn.setEnabled(False)
+        self.cancel_btn.setVisible(False)
+        s3.addWidget(self.cancel_btn)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -250,6 +257,9 @@ class Sidebar(QWidget):
 
     def set_simulating(self, active=True):
         self.simulate_btn.setEnabled(not active)
+        self.simulate_btn.setVisible(not active)
+        self.cancel_btn.setEnabled(active)
+        self.cancel_btn.setVisible(active)
         self.simulate_btn.setText("Simulating..." if active else "Start Simulation")
         if not active:
             self.progress_bar.setVisible(False)

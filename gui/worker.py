@@ -86,9 +86,12 @@ class SimulateWorker(QThread):
             sim = STEMSimulator(self.config)
             results = []
             for i, slab in enumerate(self.slab_manifest["slabs"]):
+                if self.isInterruptionRequested():
+                    break
+
                 mid = slab["material_id"]
                 hkl = "".join(str(x) for x in slab["miller_index"])
-                self.progress_update.emit(f"Simulating {mid} ({hkl})", i + 1, total)
+                self.progress_update.emit(f"Simulating {mid} ({hkl})  [{i+1}/{total}]", i + 1, total)
 
                 single_manifest = {"slabs": [slab]}
                 single_result = sim.simulate(single_manifest, Path(self.output_dir))

@@ -20,6 +20,8 @@ DEFAULT_MILLER_INDICES = [
 DEFAULT_MAX_SLAB_RANK = 20
 
 # STEM simulation parameters (abTEM)
+# frozen_phonon_configs and gpts dominate compute time.
+# Values below trade some accuracy for interactive speed.
 SIM_CONFIG = {
     "accelerating_voltage_kV": 200,
     "semi_angle_mrad": 22,
@@ -27,10 +29,10 @@ SIM_CONFIG = {
     "HAADF_outer_mrad": 200,
     "probe_defocus_nm": 0.0,
     "spherical_aberration_mm": 0.001,
-    "pixel_size_A": 0.1,
-    "frozen_phonon_configs": 15,
+    "pixel_size_A": 0.15,
+    "frozen_phonon_configs": 5,
     "thermal_sigma_A": 0.075,
     "seed": 42,
     "slice_thickness_A": 0.5,
-    "gpts": 512,
+    "gpts": 320,
 }
