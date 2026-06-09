@@ -16,18 +16,18 @@ def parse_elements(text: str) -> list[str]:
 
 
 def parse_stoichiometry(text: str) -> dict[str, tuple[float, float]]:
-    """解析化学计量比输入。
+    """解析化学计量比输入，归一化为原子比例。
+
+    输入 'V:2 O:5' 表示 V₂O₅ → 归一化为 V 占比 2/7, O 占比 5/7，
+    每个值 ±15% 容差。输入范围如 'Co:0.8-1.2' 也同样归一化。
 
     支持:
       'Co:0.8-1.2, O:1.8-2.2'  — 范围
       'V:2  O:5'                — 固定值（自动 ±15% 容差）
-      'Co:0.8-1.2;O:1.8-2.2'   — 分号分隔
       'V：2.5'                  — 中文冒号
     """
-    result = {}
+    raw = {}
     # 用正则匹配每个 "元素:数值范围" 片段
-    # 元素名: 1-2个字母，首字母大写
-    # 值: 数字.数字-数字.数字 或 数字
     pattern = re.compile(
         r'([A-Z][a-z]?)\s*[:：=\s]\s*'
         r'(-?\d+(?:\.\d+)?)\s*(?:-\s*(-?\d+(?:\.\d+)?))?'
@@ -38,16 +38,29 @@ def parse_stoichiometry(text: str) -> dict[str, tuple[float, float]]:
         hi_str = m.group(3)
         if hi_str is not None:
             hi = float(hi_str)
-            result[el] = (min(lo, hi), max(lo, hi))
+            raw[el] = (min(lo, hi), max(lo, hi))
         else:
-            result[el] = (lo * 0.85, lo * 1.15)
+            raw[el] = (lo, lo)  # 后面加容差
 
-    if not result:
+    if not raw:
         raise ValueError(
             f"Cannot parse stoichiometry: '{text}'\n"
             f"Expected format like 'Co:0.8-1.2, O:1.8-2.2' (range)\n"
             f"or 'V:2 O:5' (fixed values)"
         )
+
+    # 归一化：用中值求和，每个值 ÷ 总和 → 原子比例
+    midpoints = {el: (lo + hi) / 2 for el, (lo, hi) in raw.items()}
+    total = sum(midpoints.values())
+
+    result = {}
+    for el, (lo, hi) in raw.items():
+        lo_norm, hi_norm = lo / total, hi / total
+        if lo == hi:
+            # 固定值：归一化后 ±15% 容差
+            result[el] = (lo_norm * 0.85, lo_norm * 1.15)
+        else:
+            result[el] = (lo_norm, hi_norm)
 
     return result
 
