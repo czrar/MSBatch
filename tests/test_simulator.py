@@ -50,8 +50,8 @@ class TestEngineDetection:
     def test_engine_detection(self):
         """abTEM 1.0.9 is installed in the msbatch environment."""
         sim = STEMSimulator()
-        assert sim.engine == "abtem", (
-            f"Expected engine 'abtem', got '{sim.engine}'. "
+        assert sim.engine in ("abtem", "abtem-gpu"), (
+            f"Expected engine 'abtem' or 'abtem-gpu', got '{sim.engine}'. "
             "Is abTEM installed in the test environment?"
         )
 

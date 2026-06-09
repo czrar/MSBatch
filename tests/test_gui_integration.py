@@ -50,4 +50,4 @@ def test_advanced_settings_dialog_defaults(qtbot):
     config = dialog.get_config()
     assert config["accelerating_voltage_kV"] == 200
     assert config["HAADF_inner_mrad"] == 60
-    assert config["frozen_phonon_configs"] == 5
+    assert config["frozen_phonon_configs"] == 10

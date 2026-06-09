@@ -1,5 +1,6 @@
 """Stage 3: STEM-HAADF image simulator using abTEM."""
 import json
+import os
 import warnings
 from pathlib import Path
 
@@ -7,16 +8,18 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 from PIL import Image
 
-# Prevent dask "cannot schedule new futures after shutdown" when running
-# multiple simulations sequentially.  'threads' scheduler uses a persistent
-# pool.  Limit workers to keep CPU usage reasonable.
+# Prevent dask "cannot schedule new futures after shutdown"
 import dask.config
 dask.config.set(scheduler='threads')
 
-import os
-os.environ.setdefault('OMP_NUM_THREADS', '2')
-os.environ.setdefault('MKL_NUM_THREADS', '2')
-os.environ.setdefault('NUMBA_NUM_THREADS', '2')
+# ---- GPU detection ----
+# abTEM uses cupy automatically when it's importable.
+# If cupy is present, multislice runs on GPU (10-50x faster).
+try:
+    import cupy  # noqa: F401
+    _HAS_GPU = True
+except ImportError:
+    _HAS_GPU = False
 
 from config.defaults import SIM_CONFIG
 
@@ -58,7 +61,7 @@ class STEMSimulator:
         """Try to import abTEM.  Fall back to placeholder mode."""
         try:
             import abtem  # noqa: F401
-            self._engine = "abtem"
+            self._engine = "abtem" if not _HAS_GPU else "abtem-gpu"
         except ImportError:
             self._engine = "placeholder"
             warnings.warn(
