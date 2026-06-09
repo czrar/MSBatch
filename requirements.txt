@@ -8,3 +8,4 @@ click>=8.0.0
 PyQt6>=6.5.0
 pytest-qt>=4.5.0
 py3Dmol>=2.5.0
+PyQt6-WebEngine>=6.5.0
