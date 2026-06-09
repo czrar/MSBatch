@@ -1,4 +1,5 @@
 """Left sidebar with step-by-step parameter controls."""
+import re
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
@@ -6,6 +7,79 @@ from PyQt6.QtWidgets import (
     QProgressBar, QGroupBox, QFileDialog
 )
 from PyQt6.QtCore import pyqtSignal
+
+
+def parse_elements(text: str) -> list[str]:
+    """解析元素输入: 'Li,Co,O' / 'Li Co O' / 'Li，Co，O' / 'Li.Co.O'"""
+    tokens = re.split(r'[,，;；、\s.]+', text.strip())
+    return [t for t in tokens if t]
+
+
+def parse_stoichiometry(text: str) -> dict[str, tuple[float, float]]:
+    """解析化学计量比输入。
+
+    支持:
+      'Co:0.8-1.2, O:1.8-2.2'  — 范围
+      'V:2  O:5'                — 固定值（自动 ±15% 容差）
+      'Co:0.8-1.2;O:1.8-2.2'   — 分号分隔
+      'V：2.5'                  — 中文冒号
+    """
+    result = {}
+    # 用正则匹配每个 "元素:数值范围" 片段
+    # 元素名: 1-2个字母，首字母大写
+    # 值: 数字.数字-数字.数字 或 数字
+    pattern = re.compile(
+        r'([A-Z][a-z]?)\s*[:：=\s]\s*'
+        r'(-?\d+(?:\.\d+)?)\s*(?:-\s*(-?\d+(?:\.\d+)?))?'
+    )
+    for m in pattern.finditer(text):
+        el = m.group(1)
+        lo = float(m.group(2))
+        hi_str = m.group(3)
+        if hi_str is not None:
+            hi = float(hi_str)
+            result[el] = (min(lo, hi), max(lo, hi))
+        else:
+            result[el] = (lo * 0.85, lo * 1.15)
+
+    if not result:
+        raise ValueError(
+            f"Cannot parse stoichiometry: '{text}'\n"
+            f"Expected format like 'Co:0.8-1.2, O:1.8-2.2' (range)\n"
+            f"or 'V:2 O:5' (fixed values)"
+        )
+
+    return result
+
+
+def parse_miller(text: str) -> list[tuple[int, ...]]:
+    """解析晶面输入。
+
+    支持:
+      '001,100,110'     — 逗号分隔
+      '001 100 110'     — 空格分隔
+      '104'             — 单个
+      '(104)'           — 带括号
+      '001，104'        — 中文逗号
+    """
+    text = text.strip()
+    text = text.replace('(', '').replace(')', '')
+    text = text.replace('（', '').replace('）', '')
+
+    result = []
+    tokens = re.split(r'[,，;；、\s.]+', text)
+    for s in tokens:
+        s = s.strip()
+        if not s:
+            continue
+        if not s.isdigit():
+            raise ValueError(
+                f"Cannot parse Miller index '{s}'\n"
+                f"Expected like '001' or '104' (digits only)"
+            )
+        result.append(tuple(int(c) for c in s))
+
+    return result
 
 
 class Sidebar(QWidget):
@@ -115,45 +189,30 @@ class Sidebar(QWidget):
             QMessageBox.warning(
                 self, "Input Error",
                 f"Failed to parse input:\n\n{e}\n\n"
-                "Stoichiometry format: Co:0.8-1.2,O:1.8-2.2\n"
-                "Miller format: 001,100,110,111"
+                "Examples:\n"
+                "  Elements: Li,Co,O\n"
+                "  Stoichiometry: Co:0.8-1.2  O:1.8-2.2   (or V:2 O:5 for fixed)\n"
+                "  Miller: 001 100 110 104"
             )
 
     def _do_retrieve(self):
-        elements = [e.strip() for e in self.elements_input.text().split(",") if e.strip()]
+        # --- Elements ---
+        elements = parse_elements(self.elements_input.text())
         if not elements:
             return
-
         params = {"elements": elements}
 
+        # --- Stoichiometry ---
         stoich_text = self.stoich_input.text().strip()
         if stoich_text:
-            stoich = {}
-            for part in stoich_text.split(","):
-                part = part.strip()
-                if ":" not in part:
-                    raise ValueError(f"Invalid stoichiometry part: '{part}' (expected 'El:lo-hi')")
-                el, rng = part.split(":", 1)
-                # 用 rsplit 从右侧分割，支持负值范围如 "-1.2-0.8"
-                rng = rng.strip()
-                if "-" in rng.lstrip("-"):  # 排除前导负号
-                    parts = rng.rsplit("-", 1)
-                else:
-                    raise ValueError(f"Invalid range in '{part}': expected 'lo-hi' format")
-                lo, hi = float(parts[0].strip()), float(parts[1].strip())
-                stoich[el.strip()] = (lo, hi)
-            params["stoichiometry"] = stoich
+            params["stoichiometry"] = parse_stoichiometry(stoich_text)
 
+        # --- Miller indices ---
         miller_text = self.miller_input.text().strip()
         if miller_text:
-            miller_list = []
-            for s in miller_text.split(","):
-                s = s.strip()
-                if len(s) != 3 or not s.isdigit():
-                    raise ValueError(f"Invalid Miller index: '{s}' (expected 3 digits like '001')")
-                miller_list.append(tuple(int(c) for c in s))
-            params["miller_indices"] = miller_list
+            params["miller_indices"] = parse_miller(miller_text)
 
+        # --- Max candidates ---
         try:
             params["max_candidates"] = int(self.max_candidates_input.text())
         except ValueError:
