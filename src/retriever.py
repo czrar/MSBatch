@@ -10,6 +10,13 @@ from pymatgen.core.structure import Structure
 from config.defaults import MP_API_KEY, DEFAULT_MAX_CANDIDATES, DEFAULT_FIELDS
 
 
+def _safe_hull(val):
+    """Sort key: treat None as infinity (unstable/unknown → end of list)."""
+    if val is None:
+        return float("inf")
+    return val
+
+
 class MPRetriever:
     """Query Materials Project for candidate structures."""
 
@@ -35,7 +42,7 @@ class MPRetriever:
         candidates = self._docs_to_candidates(docs)
         if stoichiometry:
             candidates = self._filter_stoichiometry(candidates, stoichiometry)
-        candidates.sort(key=lambda c: c.get("energy_above_hull", float("inf")))
+        candidates.sort(key=lambda c: _safe_hull(c.get("energy_above_hull")))
         candidates = candidates[:max_candidates]
         for i, c in enumerate(candidates):
             c["rank"] = i + 1
@@ -65,7 +72,7 @@ class MPRetriever:
         # Sort by energy_above_hull ascending (stable phases first).
         # Candidates with same formula but different material_id are all kept
         # (no deduplication) — critical for structure identification.
-        candidates.sort(key=lambda c: c.get("energy_above_hull", float("inf")))
+        candidates.sort(key=lambda c: _safe_hull(c.get("energy_above_hull")))
         candidates = candidates[:max_candidates]
         for i, c in enumerate(candidates):
             c["rank"] = i + 1

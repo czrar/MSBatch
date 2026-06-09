@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-from gui.sidebar import Sidebar
+from gui.sidebar import Sidebar, parse_miller
 from gui.candidate_view import CandidateView, StructureViewer
 from gui.simulation_view import SimulationView
 from gui.comparison_view import ComparisonView
@@ -80,6 +80,13 @@ class MSBatchMainWindow(QMainWindow):
         self.status_bar.showMessage("Retrieving from Materials Project...")
         self.sidebar.set_retrieving(True)
         self._candidates = None
+        # 清空旧卡片，避免显示过期结果
+        self.candidate_view.populate({"candidates": []})
+
+        # 断开旧 worker（防止僵尸线程干扰）
+        if hasattr(self, "_retrieve_worker") and self._retrieve_worker.isRunning():
+            self._retrieve_worker.candidates_ready.disconnect()
+            self._retrieve_worker.error_occurred.disconnect()
 
         self._retrieve_worker = RetrieveWorker(
             elements=params.get("elements"),
@@ -115,14 +122,13 @@ class MSBatchMainWindow(QMainWindow):
         self.sidebar.set_simulating(True)
         self.status_bar.showMessage("Generating slabs...")
 
-        # Parse miller indices from sidebar
         miller_text = self.sidebar.miller_input.text().strip()
         user_indices = None
         if miller_text:
-            user_indices = [
-                tuple(int(c) for c in s.strip())
-                for s in miller_text.split(",")
-            ]
+            try:
+                user_indices = parse_miller(miller_text)
+            except ValueError:
+                user_indices = None
 
         filtered = dict(self._candidates)
         filtered["candidates"] = selected
@@ -174,7 +180,10 @@ class MSBatchMainWindow(QMainWindow):
 
     def _on_selection_changed(self):
         n = self.candidate_view.get_checked_count()
-        self.sidebar.set_candidate_count(n)
+        total = len(self._candidates["candidates"]) if self._candidates else 0
+        self.sidebar.candidate_status.setText(
+            f"Found {total} candidates  |  {n} selected"
+        )
 
     def _on_export_report(self):
         if not self._candidates or not self._sim_manifest:

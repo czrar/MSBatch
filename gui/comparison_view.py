@@ -16,6 +16,7 @@ class ComparisonView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._experimental_path = None
+        self._row_widgets = []  # track widgets for cleanup
         self._setup_ui()
 
     def _setup_ui(self):
@@ -82,14 +83,17 @@ class ComparisonView(QWidget):
             self.exp_title.setText(f"Experimental: {Path(path).name}")
 
     def set_sim_images(self, sim_manifest):
-        # Clear old
-        for i in reversed(range(self.sim_layout.count())):
-            w = self.sim_layout.itemAt(i).widget()
-            if w:
-                w.deleteLater()
+        # Clean up old widgets
+        for w in self._row_widgets:
+            self.sim_layout.removeWidget(w)
+            w.deleteLater()
+        self._row_widgets.clear()
 
         for sim in sim_manifest.get("simulations", []):
-            row = QHBoxLayout()
+            row_widget = QWidget()
+            row = QHBoxLayout(row_widget)
+            row.setContentsMargins(0, 0, 0, 0)
+
             img_label = QLabel()
             pixmap = QPixmap(sim["image_path"])
             if not pixmap.isNull():
@@ -103,7 +107,8 @@ class ComparisonView(QWidget):
 
             row.addWidget(img_label)
             row.addWidget(info)
-            self.sim_layout.insertLayout(self.sim_layout.count() - 1, row)
+            self._row_widgets.append(row_widget)
+            self.sim_layout.insertWidget(self.sim_layout.count() - 1, row_widget)
 
     def _upload_experimental(self):
         path, _ = QFileDialog.getOpenFileName(

@@ -1,6 +1,6 @@
 """Simulation image grid view with zoom."""
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QScrollArea, QFrame, QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -68,8 +68,11 @@ class ImageZoomDialog(QDialog):
 class SimulationView(QWidget):
     """Grid view of all simulated HAADF images."""
 
+    _COLS = 3  # images per row
+
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._cards = []
         self._setup_ui()
 
     def _setup_ui(self):
@@ -87,7 +90,7 @@ class SimulationView(QWidget):
         self.scroll.setVisible(False)
 
         self.grid = QWidget()
-        self.grid_layout = QHBoxLayout(self.grid)
+        self.grid_layout = QGridLayout(self.grid)
         self.grid_layout.setSpacing(8)
 
         self.scroll.setWidget(self.grid)
@@ -95,11 +98,11 @@ class SimulationView(QWidget):
         layout.addStretch()
 
     def populate(self, sim_manifest):
-        # Clear old
-        for i in reversed(range(self.grid_layout.count())):
-            w = self.grid_layout.itemAt(i).widget()
-            if w:
-                w.deleteLater()
+        # Clear old cards
+        for card in self._cards:
+            self.grid_layout.removeWidget(card)
+            card.deleteLater()
+        self._cards.clear()
 
         sims = sim_manifest.get("simulations", [])
         if not sims:
@@ -111,9 +114,11 @@ class SimulationView(QWidget):
         self.status_label.setVisible(False)
         self.scroll.setVisible(True)
 
-        for sim in sims:
+        for i, sim in enumerate(sims):
             card = ImageCard(sim["image_path"], sim["miller_index"], sim["material_id"])
             card.clicked.connect(
                 lambda path, title: ImageZoomDialog(path, title, self).exec()
             )
-            self.grid_layout.addWidget(card)
+            row, col = divmod(i, self._COLS)
+            self.grid_layout.addWidget(card, row, col)
+            self._cards.append(card)
