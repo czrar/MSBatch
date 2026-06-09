@@ -16,7 +16,10 @@ dask.config.set(scheduler='threads')
 # abTEM uses cupy automatically when it's importable.
 # If cupy is present, multislice runs on GPU (10-50x faster).
 try:
-    import cupy  # noqa: F401
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.filterwarnings("ignore", message="CUDA path could not be detected")
+        import cupy  # noqa: F401
     _HAS_GPU = True
 except ImportError:
     _HAS_GPU = False
