@@ -60,8 +60,12 @@ class STEMSimulator:
     def _try_load_engine(self):
         """Try to import abTEM.  Fall back to placeholder mode."""
         try:
-            import abtem  # noqa: F401
-            self._engine = "abtem" if not _HAS_GPU else "abtem-gpu"
+            import abtem
+            if _HAS_GPU:
+                abtem.config.set({'device': 'gpu'})
+                self._engine = "abtem-gpu"
+            else:
+                self._engine = "abtem"
         except ImportError:
             self._engine = "placeholder"
             warnings.warn(
