@@ -83,6 +83,7 @@ class MSBatchMainWindow(QMainWindow):
 
         self._retrieve_worker = RetrieveWorker(
             elements=params.get("elements"),
+            formula=params.get("formula"),
             stoichiometry=params.get("stoichiometry"),
             max_candidates=params.get("max_candidates", 50)
         )
