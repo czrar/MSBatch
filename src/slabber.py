@@ -72,11 +72,12 @@ class SlabBuilder:
                         lll_reduce=False,
                         center_slab=True,
                     )
-                    all_slabs = slab_gen.get_slabs()
-                    if not all_slabs:
+                    # get_slab() returns first termination (fast).
+                    # get_slabs() enumerates ALL possible terminations (slow).
+                    slab = slab_gen.get_slab()
+                    if slab is None:
                         print(f"  [WARN] No slab for {mat_id} {hkl}")
                         continue
-                    slab = all_slabs[0]
 
                     hkl_str = "".join(str(i) for i in hkl)
                     cif_path = subdir / f"{mat_id}_{hkl_str}.cif"

@@ -127,7 +127,7 @@ class STEMSimulator:
             out_path = out_subdir / f"{mat_id}_{hkl_str}_HAADF.png"
 
             try:
-                if self._engine == "abtem":
+                if self._engine in ("abtem", "abtem-gpu"):
                     self._run_abtem(str(cif_path), str(out_path), cfg)
                 else:
                     self._run_placeholder(str(out_path), cfg)
@@ -216,7 +216,11 @@ class STEMSimulator:
         # --- Multislice ---
         measurement = probe.scan(potential, scan, detector)
         result = measurement.compute()
-        image = np.array(result.array)
+        arr = result.array
+        # Explicit GPU→CPU transfer when using cupy
+        if _HAS_GPU and hasattr(arr, 'get'):
+            arr = arr.get()
+        image = np.array(arr)
 
         # --- Normalize and save ---
         img_normalized = self._normalize_image(image)
