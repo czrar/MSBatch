@@ -108,6 +108,18 @@ class Sidebar(QWidget):
         layout.addWidget(adv_btn)
 
     def _on_retrieve(self):
+        try:
+            self._do_retrieve()
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, "Input Error",
+                f"Failed to parse input:\n\n{e}\n\n"
+                "Stoichiometry format: Co:0.8-1.2,O:1.8-2.2\n"
+                "Miller format: 001,100,110,111"
+            )
+
+    def _do_retrieve(self):
         elements = [e.strip() for e in self.elements_input.text().split(",") if e.strip()]
         if not elements:
             return
@@ -118,17 +130,29 @@ class Sidebar(QWidget):
         if stoich_text:
             stoich = {}
             for part in stoich_text.split(","):
-                el, rng = part.strip().split(":")
-                lo, hi = rng.split("-")
-                stoich[el.strip()] = (float(lo), float(hi))
+                part = part.strip()
+                if ":" not in part:
+                    raise ValueError(f"Invalid stoichiometry part: '{part}' (expected 'El:lo-hi')")
+                el, rng = part.split(":", 1)
+                # 用 rsplit 从右侧分割，支持负值范围如 "-1.2-0.8"
+                rng = rng.strip()
+                if "-" in rng.lstrip("-"):  # 排除前导负号
+                    parts = rng.rsplit("-", 1)
+                else:
+                    raise ValueError(f"Invalid range in '{part}': expected 'lo-hi' format")
+                lo, hi = float(parts[0].strip()), float(parts[1].strip())
+                stoich[el.strip()] = (lo, hi)
             params["stoichiometry"] = stoich
 
         miller_text = self.miller_input.text().strip()
         if miller_text:
-            params["miller_indices"] = [
-                tuple(int(c) for c in s.strip())
-                for s in miller_text.split(",")
-            ]
+            miller_list = []
+            for s in miller_text.split(","):
+                s = s.strip()
+                if len(s) != 3 or not s.isdigit():
+                    raise ValueError(f"Invalid Miller index: '{s}' (expected 3 digits like '001')")
+                miller_list.append(tuple(int(c) for c in s))
+            params["miller_indices"] = miller_list
 
         try:
             params["max_candidates"] = int(self.max_candidates_input.text())
