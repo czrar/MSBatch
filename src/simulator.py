@@ -198,12 +198,15 @@ class STEMSimulator:
         atoms_ensemble = frozen_phonons.to_atoms_ensemble()
 
         # --- Adaptive gpts: ensure max scattering angle >= detector outer angle ---
+        # max_angle_mrad = gpts * lambda * 1000 / (2 * cell_size)
+        # at 200 kV: lambda = 0.02508 Å → gpts = outer_mrad * cell_size / 12.54
         cell = np.array(atoms.cell)
         a_len = np.linalg.norm(cell[0])
         b_len = np.linalg.norm(cell[1])
-        # gpts must be large enough to capture the HAADF outer cutoff
-        min_gpts_needed = int(max(a_len, b_len) * cfg["HAADF_outer_mrad"] / 500)
-        gpts = max(cfg["gpts"], min_gpts_needed)
+        cell_size = max(a_len, b_len)
+        # 1.1x safety margin on cell size
+        min_gpts = int(cell_size * 1.1 * cfg["HAADF_outer_mrad"] / 12.54) + 1
+        gpts = max(cfg["gpts"], min_gpts)
         # Round up to next power of 2 for optimal FFT
         gpts = 2 ** math.ceil(math.log2(gpts))
 
