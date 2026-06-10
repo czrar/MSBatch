@@ -19,12 +19,12 @@ DEFAULT_MILLER_INDICES = [
 ]
 DEFAULT_MIN_XY_SIZE = 12.0   # minimum slab xy supercell extent (Å)
 
-DEFAULT_MAX_SLAB_RANK = 10
+DEFAULT_MAX_SLAB_RANK = 5
 
 # STEM simulation parameters (abTEM)
-# pixel_size_A and frozen_phonon_configs dominate time.
-# pixel is increased adaptively for large cells (target ~120 points/dim).
-# Low values for fast preview; increase in Advanced Settings for publication quality.
+# pixel is increased adaptively for large cells (target ~60 points/dim).
+# Frozen phonons dominate time; 2 is enough for column visibility.
+# Increase in Advanced Settings for publication-quality images.
 SIM_CONFIG = {
     "accelerating_voltage_kV": 200,
     "semi_angle_mrad": 22,
@@ -33,7 +33,7 @@ SIM_CONFIG = {
     "probe_defocus_nm": 0.0,
     "spherical_aberration_mm": 0.001,
     "pixel_size_A": 0.10,
-    "frozen_phonon_configs": 5,
+    "frozen_phonon_configs": 2,
     "thermal_sigma_A": 0.075,
     "seed": 42,
     "slice_thickness_A": 0.5,
