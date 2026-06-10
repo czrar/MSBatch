@@ -210,11 +210,11 @@ class STEMSimulator:
         # Round up to next power of 2 for optimal FFT
         gpts = 2 ** math.ceil(math.log2(gpts))
 
-        # --- Adaptive pixel size: target ~60 scan points per dimension ---
-        # regardless of slab size, so all slabs take similar time.
-        target_points = 60
+        # --- Adaptive pixel size: target ~80 scan points per dimension ---
+        target_points = 80
         auto_pixel = cell_size / target_points
         pixel = max(cfg["pixel_size_A"], auto_pixel)
+        print(f"  [SIM] cell={cell_size:.1f}A  gpts={gpts}  pixel={pixel:.3f}A  phonon={cfg['frozen_phonon_configs']}")
 
         # --- Electrostatic potential ---
         potential = Potential(

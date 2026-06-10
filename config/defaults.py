@@ -17,13 +17,13 @@ DEFAULT_MIN_VACUUM = 15.0           # Angstrom
 DEFAULT_MILLER_INDICES = [
     (0, 0, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1)
 ]
-DEFAULT_MIN_XY_SIZE = 12.0   # minimum slab xy supercell extent (Å)
+DEFAULT_MIN_XY_SIZE = 16.0   # minimum slab xy supercell extent (Å)
 
 DEFAULT_MAX_SLAB_RANK = 5
 
 # STEM simulation parameters (abTEM)
-# pixel is increased adaptively for large cells (target ~60 points/dim).
-# Frozen phonons dominate time; 2 is enough for column visibility.
+# pixel auto-scales to target ~80 px/dim regardless of slab size.
+# frozen_phonon 3 gives adequate Z-contrast for preview.
 # Increase in Advanced Settings for publication-quality images.
 SIM_CONFIG = {
     "accelerating_voltage_kV": 200,
@@ -33,7 +33,7 @@ SIM_CONFIG = {
     "probe_defocus_nm": 0.0,
     "spherical_aberration_mm": 0.001,
     "pixel_size_A": 0.10,
-    "frozen_phonon_configs": 2,
+    "frozen_phonon_configs": 3,
     "thermal_sigma_A": 0.075,
     "seed": 42,
     "slice_thickness_A": 0.5,
