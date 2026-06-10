@@ -210,11 +210,12 @@ class STEMSimulator:
         # Round up to next power of 2 for optimal FFT
         gpts = 2 ** math.ceil(math.log2(gpts))
 
-        # --- Adaptive pixel size: target ~80 scan points per dimension ---
-        target_points = 80
+        # --- Adaptive pixel size: target ~100 scan points per dimension ---
+        target_points = 100
         auto_pixel = cell_size / target_points
         pixel = max(cfg["pixel_size_A"], auto_pixel)
-        print(f"  [SIM] cell={cell_size:.1f}A  gpts={gpts}  pixel={pixel:.3f}A  phonon={cfg['frozen_phonon_configs']}")
+        heavy = sum(1 for a in atoms if a.number > 8)
+        print(f"  [SIM] cell={cell_size:.1f}A  gpts={gpts}  {len(atoms)} atoms ({heavy} heavy)  pixel={pixel:.3f}A  phonon={cfg['frozen_phonon_configs']}")
 
         # --- Electrostatic potential ---
         potential = Potential(

@@ -89,6 +89,10 @@ class SlabBuilder:
                     rep_a = max(1, int(np.ceil(self.min_xy_size / a_len))) if a_len > 0 else 1
                     rep_b = max(1, int(np.ceil(self.min_xy_size / b_len))) if b_len > 0 else 1
                     slab.make_supercell([rep_a, rep_b, 1])
+                    new_a = np.linalg.norm(slab.lattice.matrix[0])
+                    new_b = np.linalg.norm(slab.lattice.matrix[1])
+                    heavy = sum(1 for s in slab if s.specie.Z > 8)
+                    print(f"  [SLAB] {mat_id} ({hkl_str}): {a_len:.1f}x{b_len:.1f} -> {new_a:.1f}x{new_b:.1f} A, {heavy} heavy atoms")
 
                     hkl_str = "".join(str(i) for i in hkl)
                     cif_path = subdir / f"{mat_id}_{hkl_str}.cif"

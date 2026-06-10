@@ -17,7 +17,7 @@ DEFAULT_MIN_VACUUM = 15.0           # Angstrom
 DEFAULT_MILLER_INDICES = [
     (0, 0, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1)
 ]
-DEFAULT_MIN_XY_SIZE = 16.0   # minimum slab xy supercell extent (Å)
+DEFAULT_MIN_XY_SIZE = 25.0   # minimum slab xy supercell extent (Å)
 
 DEFAULT_MAX_SLAB_RANK = 5
 
