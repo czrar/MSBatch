@@ -68,7 +68,12 @@ class TestBuildSlabsBasic:
         assert slab["material_id"] == "mp-cu"
         assert slab["formula_pretty"] == "Cu"
         assert slab["miller_index"] == [0, 0, 1]
-        assert slab["supercell"] == [1, 1, 1]
+        # Cu a=3.615 Å, min_xy_size=20 → supercell expands to meet ≥20 Å
+        assert isinstance(slab["supercell"], list)
+        assert len(slab["supercell"]) == 3
+        assert slab["supercell"][0] >= 1
+        assert slab["supercell"][1] >= 1
+        assert slab["supercell"][2] == 1
 
         # Verify CIF file exists on disk
         cif_path = Path(slab["cif_path"])
@@ -220,3 +225,112 @@ class TestSlabManifestStructure:
         assert "slabs" in loaded
         assert len(loaded["slabs"]) == 1
         assert loaded["slabs"][0]["material_id"] == "mp-cu"
+
+
+class TestUserIndicesReplaces:
+    """Verify user_indices REPLACES default miller_indices, not appended."""
+
+    def test_user_indices_replaces(self, tmp_path):
+        builder = SlabBuilder(min_slab_thickness=10.0, min_vacuum=10.0)
+        candidates = make_candidates_json([
+            make_candidate("mp-cu", "Cu", 1, CU_STRUCT_DICT),
+        ])
+
+        # default miller_indices includes (0,0,1), (1,0,0), (1,1,0), (1,1,1)
+        # user provides only (1,1,1) — should NOT also get the defaults
+        manifest = builder.build(
+            candidates,
+            miller_indices=None,
+            user_indices=[(1, 1, 1)],
+            deduplicate_symmetrically=False,
+            output_dir=tmp_path,
+        )
+
+        assert len(manifest["slabs"]) == 1
+        assert manifest["slabs"][0]["miller_index"] == [1, 1, 1]
+
+    def test_user_indices_replaces_all_defaults(self, tmp_path):
+        """Even when user provides many indices, defaults are NOT merged."""
+        builder = SlabBuilder(min_slab_thickness=10.0, min_vacuum=10.0)
+        candidates = make_candidates_json([
+            make_candidate("mp-cu", "Cu", 1, CU_STRUCT_DICT),
+        ])
+
+        manifest = builder.build(
+            candidates,
+            miller_indices=None,
+            user_indices=[(0, 0, 1), (1, 1, 0)],
+            deduplicate_symmetrically=False,
+            output_dir=tmp_path,
+        )
+
+        # With dedup on, (0,0,1) and (1,1,0) are not equivalent in cubic
+        # Wait, in Fm-3m, (001) and (110) are NOT symmetry-equivalent.
+        # So we should get 2 slabs from user_indices, not 2+4=6
+        assert len(manifest["slabs"]) == 2
+        faces = sorted([tuple(s["miller_index"]) for s in manifest["slabs"]])
+        assert faces == [(0, 0, 1), (1, 1, 0)]
+
+
+class TestSupercellXYExpansion:
+    """Verify xy supercell expands to meet min_xy_size."""
+
+    def test_supercell_expansion_small_cell(self, tmp_path):
+        """Cu cell is 3.615 A → with min_xy_size=20, need 6x6 supercell."""
+        builder = SlabBuilder(
+            min_slab_thickness=10.0, min_vacuum=10.0, min_xy_size=20.0
+        )
+        candidates = make_candidates_json([
+            make_candidate("mp-cu", "Cu", 1, CU_STRUCT_DICT),
+        ])
+
+        manifest = builder.build(
+            candidates,
+            miller_indices=[(0, 0, 1)],
+            output_dir=tmp_path,
+        )
+
+        slab = manifest["slabs"][0]
+        assert slab["supercell"][0] >= 6
+        assert slab["supercell"][1] >= 6
+        assert slab["supercell"][2] == 1
+
+    def test_supercell_expansion_large_min_xy(self, tmp_path):
+        """Larger min_xy_size → larger supercell."""
+        builder = SlabBuilder(
+            min_slab_thickness=10.0, min_vacuum=10.0, min_xy_size=40.0
+        )
+        candidates = make_candidates_json([
+            make_candidate("mp-cu", "Cu", 1, CU_STRUCT_DICT),
+        ])
+
+        manifest = builder.build(
+            candidates,
+            miller_indices=[(0, 0, 1)],
+            output_dir=tmp_path,
+        )
+
+        slab = manifest["slabs"][0]
+        # Cu a=3.615, ceil(40/3.615)=12
+        assert slab["supercell"][0] >= 12
+        assert slab["supercell"][1] >= 12
+
+    def test_supercell_always_at_least_one(self, tmp_path):
+        """When min_xy_size is small, supercell should be at least [1,1,1]."""
+        builder = SlabBuilder(
+            min_slab_thickness=10.0, min_vacuum=10.0, min_xy_size=1.0
+        )
+        candidates = make_candidates_json([
+            make_candidate("mp-cu", "Cu", 1, CU_STRUCT_DICT),
+        ])
+
+        manifest = builder.build(
+            candidates,
+            miller_indices=[(0, 0, 1)],
+            output_dir=tmp_path,
+        )
+
+        slab = manifest["slabs"][0]
+        assert slab["supercell"][0] >= 1
+        assert slab["supercell"][1] >= 1
+        assert slab["supercell"][2] == 1

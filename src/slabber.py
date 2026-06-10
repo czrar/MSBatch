@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 from pymatgen.core.structure import Structure
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -10,7 +11,8 @@ from pymatgen.io.cif import CifWriter
 
 from config.defaults import (
     DEFAULT_MIN_SLAB_THICKNESS, DEFAULT_MIN_VACUUM,
-    DEFAULT_MILLER_INDICES, DEFAULT_MAX_SLAB_RANK
+    DEFAULT_MILLER_INDICES, DEFAULT_MAX_SLAB_RANK,
+    DEFAULT_MIN_XY_SIZE,
 )
 
 
@@ -21,9 +23,11 @@ class SlabBuilder:
         self,
         min_slab_thickness: float = DEFAULT_MIN_SLAB_THICKNESS,
         min_vacuum: float = DEFAULT_MIN_VACUUM,
+        min_xy_size: float = DEFAULT_MIN_XY_SIZE,
     ):
         self.min_slab_thickness = min_slab_thickness
         self.min_vacuum = min_vacuum
+        self.min_xy_size = min_xy_size
 
     def build(
         self,
@@ -38,7 +42,7 @@ class SlabBuilder:
         if miller_indices is None:
             miller_indices = list(DEFAULT_MILLER_INDICES)
         if user_indices:
-            miller_indices = list(miller_indices) + list(user_indices)
+            miller_indices = list(user_indices)
 
         output_dir = Path(output_dir)
         slabs_dir = output_dir / "slabs"
@@ -79,6 +83,13 @@ class SlabBuilder:
                         print(f"  [WARN] No slab for {mat_id} {hkl}")
                         continue
 
+                    # 扩展xy超胞使视场 ≥ min_xy_size
+                    a_len = np.linalg.norm(slab.lattice.matrix[0])
+                    b_len = np.linalg.norm(slab.lattice.matrix[1])
+                    rep_a = max(1, int(np.ceil(self.min_xy_size / a_len))) if a_len > 0 else 1
+                    rep_b = max(1, int(np.ceil(self.min_xy_size / b_len))) if b_len > 0 else 1
+                    slab.make_supercell([rep_a, rep_b, 1])
+
                     hkl_str = "".join(str(i) for i in hkl)
                     cif_path = subdir / f"{mat_id}_{hkl_str}.cif"
                     CifWriter(slab).write_file(str(cif_path))
@@ -96,7 +107,7 @@ class SlabBuilder:
                         "cif_path": str(cif_path),
                         "slab_thickness_A": round(slab.lattice.c, 2),
                         "vacuum_A": round(slab.lattice.c - slab_height, 2),
-                        "supercell": [1, 1, 1],
+                        "supercell": [rep_a, rep_b, 1],
                     })
                 except Exception as e:
                     print(f"  [WARN] Failed to slab {mat_id} {hkl}: {e}")

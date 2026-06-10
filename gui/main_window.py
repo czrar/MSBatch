@@ -1,5 +1,6 @@
 """Main window assembling sidebar and tabbed views."""
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -134,9 +135,13 @@ class MSBatchMainWindow(QMainWindow):
         filtered = dict(self._candidates)
         filtered["candidates"] = selected
 
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        output_dir = f"data/output/{ts}"
+        self._output_dir = output_dir
+
         self._slab_worker = SlabWorker(
             filtered, miller_indices=user_indices,
-            output_dir="data/output"
+            output_dir=output_dir
         )
         self._slab_worker.slabs_ready.connect(self._on_slabs_ready)
         self._slab_worker.error_occurred.connect(self._on_error)
@@ -148,7 +153,7 @@ class MSBatchMainWindow(QMainWindow):
         self.status_bar.showMessage(f"Generated {n} slabs. Starting simulation...")
 
         self._sim_worker = SimulateWorker(
-            manifest, output_dir="data/output",
+            manifest, output_dir=self._output_dir,
             config=self._sim_config
         )
         self._sim_worker.progress_update.connect(self.sidebar.set_progress)

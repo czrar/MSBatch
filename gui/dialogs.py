@@ -95,6 +95,15 @@ class AdvancedSettingsDialog(QDialog):
         tds_form.addRow("Thermal Sigma:", self.thermal_sigma)
         layout.addWidget(tds_group)
 
+        # Atomic filter group
+        af_group = QGroupBox("Atomic Number Filter")
+        af_layout = QFormLayout(af_group)
+        self.min_z = QSpinBox()
+        self.min_z.setRange(0, 50)
+        self.min_z.setToolTip("Only keep atoms with Z >= this value (0=keep all)")
+        af_layout.addRow("Min Atomic Number (Z):", self.min_z)
+        layout.addWidget(af_group)
+
         # Buttons
         btn_layout = QHBoxLayout()
         reset_btn = QPushButton("Restore Defaults")
@@ -125,6 +134,7 @@ class AdvancedSettingsDialog(QDialog):
         self.pixel_size.setValue(c["pixel_size_A"])
         self.frozen_phonons.setValue(c["frozen_phonon_configs"])
         self.thermal_sigma.setValue(c["thermal_sigma_A"])
+        self.min_z.setValue(c.get("min_atomic_number", 0))
 
     def _reset_defaults(self):
         from config.defaults import SIM_CONFIG as D
@@ -145,6 +155,7 @@ class AdvancedSettingsDialog(QDialog):
             "gpts": self._config.get("gpts", 512),
             "slice_thickness_A": self._config.get("slice_thickness_A", 0.5),
             "seed": self._config.get("seed", 42),
+            "min_atomic_number": self.min_z.value(),
         }
 
     def get_slab_params(self):

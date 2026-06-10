@@ -1,5 +1,6 @@
 """Stage 3: STEM-HAADF image simulator using abTEM."""
 import json
+import math
 import os
 import warnings
 from pathlib import Path
@@ -170,6 +171,15 @@ class STEMSimulator:
         )
 
         atoms = read(cif_path)
+
+        # --- Atomic number filter ---
+        min_z = cfg.get("min_atomic_number", 0)
+        if min_z > 0:
+            mask = [atom.number >= min_z for atom in atoms]
+            atoms = atoms[mask]
+            if len(atoms) == 0:
+                raise ValueError(f"all atoms removed by min_atomic_number={min_z}")
+
         # abTEM requires an orthogonal simulation cell.
         # abTEM 1.0.9's orthogonalize_cell has a bug where the diagonal
         # check passes for cells with off-diagonal elements => we use a
@@ -187,10 +197,20 @@ class STEMSimulator:
         )
         atoms_ensemble = frozen_phonons.to_atoms_ensemble()
 
+        # --- Adaptive gpts: ensure max scattering angle >= detector outer angle ---
+        cell = np.array(atoms.cell)
+        a_len = np.linalg.norm(cell[0])
+        b_len = np.linalg.norm(cell[1])
+        # gpts must be large enough to capture the HAADF outer cutoff
+        min_gpts_needed = int(max(a_len, b_len) * cfg["HAADF_outer_mrad"] / 500)
+        gpts = max(cfg["gpts"], min_gpts_needed)
+        # Round up to next power of 2 for optimal FFT
+        gpts = 2 ** math.ceil(math.log2(gpts))
+
         # --- Electrostatic potential ---
         potential = Potential(
             atoms_ensemble,
-            gpts=cfg["gpts"],
+            gpts=gpts,
             slice_thickness=cfg["slice_thickness_A"],
             projection="infinite",
         )

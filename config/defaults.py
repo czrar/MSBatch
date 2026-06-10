@@ -17,6 +17,8 @@ DEFAULT_MIN_VACUUM = 15.0           # Angstrom
 DEFAULT_MILLER_INDICES = [
     (0, 0, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1)
 ]
+DEFAULT_MIN_XY_SIZE = 20.0   # minimum slab xy supercell extent (Å)
+
 DEFAULT_MAX_SLAB_RANK = 10
 
 # STEM simulation parameters (abTEM)
@@ -26,13 +28,14 @@ SIM_CONFIG = {
     "accelerating_voltage_kV": 200,
     "semi_angle_mrad": 22,
     "HAADF_inner_mrad": 60,
-    "HAADF_outer_mrad": 200,
+    "HAADF_outer_mrad": 180,
     "probe_defocus_nm": 0.0,
     "spherical_aberration_mm": 0.001,
-    "pixel_size_A": 0.12,
-    "frozen_phonon_configs": 3,
+    "pixel_size_A": 0.10,
+    "frozen_phonon_configs": 8,
     "thermal_sigma_A": 0.075,
     "seed": 42,
     "slice_thickness_A": 0.5,
-    "gpts": 320,
+    "gpts": 512,
+    "min_atomic_number": 0,
 }
