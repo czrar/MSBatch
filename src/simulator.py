@@ -204,8 +204,8 @@ class STEMSimulator:
         a_len = np.linalg.norm(cell[0])
         b_len = np.linalg.norm(cell[1])
         cell_size = max(a_len, b_len)
-        # 1.1x safety margin on cell size
-        min_gpts = int(cell_size * 1.1 * cfg["HAADF_outer_mrad"] / 12.54) + 1
+        # 1.2x safety margin; ceil (not int) ensures we never under-estimate
+        min_gpts = math.ceil(cell_size * 1.2 * cfg["HAADF_outer_mrad"] / 12.54)
         gpts = max(cfg["gpts"], min_gpts)
         # Round up to next power of 2 for optimal FFT
         gpts = 2 ** math.ceil(math.log2(gpts))

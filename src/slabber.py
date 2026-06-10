@@ -92,9 +92,8 @@ class SlabBuilder:
                     new_a = np.linalg.norm(slab.lattice.matrix[0])
                     new_b = np.linalg.norm(slab.lattice.matrix[1])
                     heavy = sum(1 for s in slab if s.specie.Z > 8)
-                    print(f"  [SLAB] {mat_id} ({hkl_str}): {a_len:.1f}x{b_len:.1f} -> {new_a:.1f}x{new_b:.1f} A, {heavy} heavy atoms")
-
                     hkl_str = "".join(str(i) for i in hkl)
+                    print(f"  [SLAB] {mat_id} ({hkl_str}): {a_len:.1f}x{b_len:.1f} -> {new_a:.1f}x{new_b:.1f} A, {heavy} heavy atoms")
                     cif_path = subdir / f"{mat_id}_{hkl_str}.cif"
                     CifWriter(slab).write_file(str(cif_path))
 
