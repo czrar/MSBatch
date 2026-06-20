@@ -21,7 +21,7 @@ env\python.exe gui_main.py
 或者在命令行中：
 
 ```bash
-D:\conda_envs\msbatch\python.exe gui_main.py
+python gui_main.py
 ```
 
 ### 第三步：使用流程
@@ -48,10 +48,11 @@ D:\conda_envs\msbatch\python.exe gui_main.py
 
 ```bash
 # 创建环境
-conda create --prefix D:\conda_envs\msbatch python=3.11 -y
+conda create -n msbatch python=3.11 -y
+conda activate msbatch
 
 # 安装依赖
-D:\conda_envs\msbatch\python.exe -m pip install pymatgen mp-api abtem numpy scipy Pillow click PyQt6 py3Dmol pytest pytest-qt PyQt6-WebEngine
+pip install pymatgen mp-api abtem numpy scipy Pillow click PyQt6 py3Dmol pytest pytest-qt PyQt6-WebEngine
 ```
 
 ### 配置 API Key
