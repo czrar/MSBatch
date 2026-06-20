@@ -1,7 +1,7 @@
 """Simulation image grid view with zoom."""
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QScrollArea, QFrame, QDialog
+    QScrollArea, QFrame, QDialog, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
@@ -10,12 +10,16 @@ from PyQt6.QtGui import QPixmap
 class ImageCard(QFrame):
     """Single simulated image with label. Click to zoom."""
     clicked = pyqtSignal(str, str)  # image_path, title
+    toggled = pyqtSignal(int, bool)  # index, checked
 
-    def __init__(self, image_path, miller_index, material_id, parent=None):
+    def __init__(self, image_path, miller_index, material_id,
+                 index=0, termination_index=0, selectable=False, parent=None):
         super().__init__(parent)
         self.image_path = image_path
         self._miller = miller_index
         self._mid = material_id
+        self._index = index
+        self._ti = termination_index
 
         self.setFrameStyle(QFrame.Shape.StyledPanel)
         self.setStyleSheet(
@@ -37,10 +41,23 @@ class ImageCard(QFrame):
         layout.addWidget(img_label)
 
         hkl_str = f"({miller_index[0]}{miller_index[1]}{miller_index[2]})"
-        label = QLabel(f"{material_id} {hkl_str}")
+        ti_str = f" T{termination_index}" if termination_index > 0 else ""
+        label = QLabel(f"{material_id} {hkl_str}{ti_str}")
         label.setStyleSheet("font-size: 10px; color: #666;")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
+
+        self.checkbox = None
+        if selectable:
+            self.checkbox = QCheckBox("Full Sim")
+            self.checkbox.setChecked(False)
+            self.checkbox.toggled.connect(
+                lambda checked: self.toggled.emit(self._index, checked)
+            )
+            layout.addWidget(self.checkbox)
+
+    def is_checked(self):
+        return self.checkbox and self.checkbox.isChecked()
 
     def mousePressEvent(self, event):
         hkl_str = f"({self._miller[0]}{self._miller[1]}{self._miller[2]})"
@@ -94,11 +111,16 @@ class SimulationView(QWidget):
         self.grid_layout.setSpacing(8)
 
         self.scroll.setWidget(self.grid)
-        layout.addWidget(self.scroll)
-        layout.addStretch()
+        layout.addWidget(self.scroll, 1)  # stretch=1: fill available space
 
-    def populate(self, sim_manifest):
-        # Clear old cards
+    def populate(self, sim_manifest, selectable=False):
+        """Populate grid with simulation images.
+
+        Args:
+            sim_manifest: dict with ``"simulations"`` list.
+            selectable: if True, each image gets a checkbox for
+                        selective full simulation.
+        """
         for card in self._cards:
             self.grid_layout.removeWidget(card)
             card.deleteLater()
@@ -115,10 +137,18 @@ class SimulationView(QWidget):
         self.scroll.setVisible(True)
 
         for i, sim in enumerate(sims):
-            card = ImageCard(sim["image_path"], sim["miller_index"], sim["material_id"])
+            card = ImageCard(sim["image_path"], sim["miller_index"],
+                            sim["material_id"], index=i,
+                            termination_index=sim.get("termination_index", 0),
+                            selectable=selectable)
             card.clicked.connect(
-                lambda path, title: ImageZoomDialog(path, title, self).exec()
+                lambda path, title, c=card:
+                    ImageZoomDialog(path, title, self).exec()
             )
             row, col = divmod(i, self._COLS)
             self.grid_layout.addWidget(card, row, col)
             self._cards.append(card)
+
+    def get_selected_indices(self):
+        """Return list of indices of cards that are checked."""
+        return [i for i, card in enumerate(self._cards) if card.is_checked()]

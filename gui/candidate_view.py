@@ -70,8 +70,25 @@ class CandidateCard(QFrame):
         title.setStyleSheet("font-size: 15px; font-weight: bold;")
         info_layout.addWidget(title)
 
-        mid = QLabel(f"{self.material_id}  |  #{c['rank']}")
-        mid.setStyleSheet("font-size: 11px; color: #888;")
+        source = c.get("source", "MP")
+        mid_text = f"{self.material_id}  |  #{c['rank']}"
+        if source == "COD":
+            mid_text += "  [COD]"
+            # Add COD quality info if available
+            rfac = c.get("cod_r_factor")
+            jrnl = c.get("cod_journal", "")
+            yr = c.get("cod_year", "")
+            if rfac is not None:
+                mid_text += f"  R={rfac:.3f}"
+            if yr:
+                mid_text += f"  {yr}"
+        mid = QLabel(mid_text)
+        mid.setStyleSheet(
+            "font-size: 11px; color: #e67e22; font-weight: bold;"
+            if source == "COD" else
+            "font-size: 11px; color: #888;"
+        )
+        mid.setWordWrap(True)
         info_layout.addWidget(mid)
 
         grid = QHBoxLayout()

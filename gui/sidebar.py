@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton,
-    QProgressBar, QGroupBox, QFileDialog
+    QProgressBar, QGroupBox, QFileDialog, QComboBox
 )
 from PyQt6.QtCore import pyqtSignal
 
@@ -80,7 +80,8 @@ class Sidebar(QWidget):
     """Left parameter panel with step controls."""
 
     retrieve_clicked = pyqtSignal(dict)
-    simulate_clicked = pyqtSignal()
+    preview_clicked = pyqtSignal()
+    full_simulate_clicked = pyqtSignal()
     cancel_clicked = pyqtSignal()
     advanced_clicked = pyqtSignal()
     experiment_image_dropped = pyqtSignal(str)
@@ -98,6 +99,11 @@ class Sidebar(QWidget):
         # Step 1
         step1 = QGroupBox("Step 1: Search")
         s1 = QVBoxLayout(step1)
+
+        s1.addWidget(QLabel("Database:"))
+        self.database_selector = QComboBox()
+        self.database_selector.addItems(["Materials Project", "COD", "Both"])
+        s1.addWidget(self.database_selector)
 
         s1.addWidget(QLabel("Formula (exact):"))
         self.formula_input = QLineEdit()
@@ -144,15 +150,26 @@ class Sidebar(QWidget):
         # Step 3
         step3 = QGroupBox("Step 3: Simulation")
         s3 = QVBoxLayout(step3)
-        self.simulate_btn = QPushButton("Start Simulation")
-        self.simulate_btn.clicked.connect(self.simulate_clicked.emit)
-        self.simulate_btn.setEnabled(False)
-        self.simulate_btn.setStyleSheet(
+        self.preview_btn = QPushButton("Generate Previews")
+        self.preview_btn.clicked.connect(self.preview_clicked.emit)
+        self.preview_btn.setEnabled(False)
+        self.preview_btn.setStyleSheet(
+            "QPushButton { background-color: #0f3460; color: white; padding: 10px; "
+            "border-radius: 4px; font-weight: bold; font-size: 13px; }"
+            "QPushButton:disabled { background-color: #ccc; }"
+        )
+        s3.addWidget(self.preview_btn)
+
+        self.full_sim_btn = QPushButton("Full Simulate Selected")
+        self.full_sim_btn.clicked.connect(self.full_simulate_clicked.emit)
+        self.full_sim_btn.setEnabled(False)
+        self.full_sim_btn.setVisible(False)
+        self.full_sim_btn.setStyleSheet(
             "QPushButton { background-color: #e94560; color: white; padding: 10px; "
             "border-radius: 4px; font-weight: bold; font-size: 13px; }"
             "QPushButton:disabled { background-color: #ccc; }"
         )
-        s3.addWidget(self.simulate_btn)
+        s3.addWidget(self.full_sim_btn)
 
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.clicked.connect(self.cancel_clicked.emit)
@@ -228,6 +245,9 @@ class Sidebar(QWidget):
         except ValueError:
             params["max_candidates"] = 50
 
+        db_map = {"Materials Project": "MP", "COD": "COD", "Both": "Both"}
+        params["database"] = db_map[self.database_selector.currentText()]
+
         self.retrieve_clicked.emit(params)
 
     def _on_upload_experimental(self):
@@ -242,7 +262,7 @@ class Sidebar(QWidget):
     def set_candidate_count(self, count):
         plural = "s" if count != 1 else ""
         self.candidate_status.setText(f"Found {count} candidate{plural}")
-        self.simulate_btn.setEnabled(count > 0)
+        self.preview_btn.setEnabled(count > 0)
 
     def set_progress(self, message, current, total):
         self.progress_bar.setVisible(True)
@@ -255,12 +275,28 @@ class Sidebar(QWidget):
         self.retrieve_btn.setEnabled(not active)
         self.retrieve_btn.setText("Retrieving..." if active else "Start Retrieval")
 
-    def set_simulating(self, active=True):
-        self.simulate_btn.setEnabled(not active)
-        self.simulate_btn.setVisible(not active)
+    def set_previewing(self, active=True):
+        self.preview_btn.setEnabled(not active)
+        self.preview_btn.setVisible(not active)
+        self.full_sim_btn.setVisible(False)
         self.cancel_btn.setEnabled(active)
         self.cancel_btn.setVisible(active)
-        self.simulate_btn.setText("Simulating..." if active else "Start Simulation")
+        self.preview_btn.setText("Generating Previews..." if active else "Generate Previews")
         if not active:
             self.progress_bar.setVisible(False)
             self.progress_label.setVisible(False)
+
+    def set_simulating(self, active=True):
+        self.full_sim_btn.setEnabled(not active)
+        self.full_sim_btn.setVisible(not active)
+        self.cancel_btn.setEnabled(active)
+        self.cancel_btn.setVisible(active)
+        self.full_sim_btn.setText("Simulating..." if active else "Full Simulate Selected")
+        if not active:
+            self.progress_bar.setVisible(False)
+            self.progress_label.setVisible(False)
+
+    def show_full_sim_button(self):
+        self.preview_btn.setVisible(False)
+        self.full_sim_btn.setVisible(True)
+        self.full_sim_btn.setEnabled(True)

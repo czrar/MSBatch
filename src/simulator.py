@@ -125,7 +125,7 @@ class STEMSimulator:
             formula = slab.get("formula_pretty", "")
             out_subdir = sim_dir / f"{mat_id}_{formula}"
             out_subdir.mkdir(parents=True, exist_ok=True)
-            out_path = out_subdir / f"{mat_id}_{hkl_str}_HAADF.png"
+            out_path = out_subdir / self._sim_filename(slab)
 
             try:
                 if self._engine in ("abtem", "abtem-gpu"):
@@ -139,6 +139,7 @@ class STEMSimulator:
             simulations.append({
                 "material_id": mat_id,
                 "miller_index": slab["miller_index"],
+                "termination_index": slab.get("termination_index", 0),
                 "image_path": str(out_path),
             })
 
@@ -257,6 +258,135 @@ class STEMSimulator:
         Image.fromarray(img_normalized).save(out_path)
 
     # ------------------------------------------------------------------
+    # Fast projection (Z²-weighted, no multislice)
+    # ------------------------------------------------------------------
+
+    def simulate_fast(self, manifest: dict, output_dir: str | Path) -> dict:
+        """Run fast Z² projection for every slab in *manifest*.
+
+        Produces structural preview images in milliseconds per slab by
+        projecting atom positions onto the xy plane with Z² weighting
+        and a Gaussian blur to approximate the STEM probe shape.
+        No multislice, no frozen phonons — purely geometric.
+
+        Parameters
+        ----------
+        manifest : dict
+            Slabs manifest.  Same format as :meth:`simulate`.
+        output_dir : str or Path
+            Root output directory.  Images are written to
+            ``<output_dir>/sim_images/``.
+
+        Returns
+        -------
+        dict
+            Manifest with ``"simulations"`` list.
+        """
+        output_dir = Path(output_dir)
+        sim_dir = output_dir / "sim_images"
+        sim_dir.mkdir(parents=True, exist_ok=True)
+
+        simulations = []
+        for slab in manifest["slabs"]:
+            cif_path = Path(slab["cif_path"])
+            if not cif_path.exists():
+                print(f"  [SKIP] CIF not found: {cif_path}")
+                continue
+
+            mat_id = slab["material_id"]
+            hkl_str = "".join(str(i) for i in slab["miller_index"])
+            formula = slab.get("formula_pretty", "")
+            out_subdir = sim_dir / f"{mat_id}_{formula}"
+            out_subdir.mkdir(parents=True, exist_ok=True)
+            out_path = out_subdir / self._sim_filename(slab)
+
+            try:
+                self._run_fast(str(cif_path), str(out_path), self.config)
+            except Exception as e:
+                print(f"  [ERR] Fast projection failed {mat_id} {hkl_str}: {e}")
+                continue
+
+            simulations.append({
+                "material_id": mat_id,
+                "miller_index": slab["miller_index"],
+                "termination_index": slab.get("termination_index", 0),
+                "image_path": str(out_path),
+            })
+
+        return {"simulations": simulations}
+
+    def _run_fast(self, cif_path: str, out_path: str, cfg: dict, image_size: int = 512):
+        """Z²-weighted xy projection of atom positions.
+
+        1. Load atoms, filter by *min_atomic_number*.
+        2. Discretise fractional (x, y) onto a fine grid (~0.05 Å/px)
+           using bilinear splatting for sub-pixel precision.
+        3. Accumulate Z² per pixel (HAADF ∝ Z^α, α ≈ 1.7–2.0).
+        4. Convolve with a Gaussian to mimic the electron probe (~0.7 Å
+           FWHM at 200 kV), using periodic (wrap) boundary conditions.
+        5. Normalise and save as PNG.
+
+        Runs in O(N_atoms) time — typically < 50 ms per slab.
+        """
+        from ase.io import read
+
+        atoms = read(cif_path)
+
+        min_z = cfg.get("min_atomic_number", 0)
+        if min_z > 0:
+            mask = [atom.number >= min_z for atom in atoms]
+            atoms = atoms[mask]
+            if len(atoms) == 0:
+                raise ValueError(f"all atoms removed by min_atomic_number={min_z}")
+
+        cell = np.array(atoms.cell)
+        a_len = np.linalg.norm(cell[0])
+        b_len = np.linalg.norm(cell[1])
+
+        pixel_A = 0.05
+        nx = max(64, int(a_len / pixel_A))
+        ny = max(64, int(b_len / pixel_A))
+
+        sigma_px = max(1.0, (0.7 / 2.355) / pixel_A)
+
+        img = np.zeros((ny, nx), dtype=np.float64)
+        frac = atoms.get_scaled_positions()
+
+        for pos, Z in zip(frac, atoms.numbers):
+            fx = pos[0] % 1.0
+            fy = pos[1] % 1.0
+
+            # Bilinear splatting
+            cx = fx * nx - 0.5
+            cy = fy * ny - 0.5
+            ix0 = int(np.floor(cx))
+            iy0 = int(np.floor(cy))
+            wx1 = cx - ix0
+            wy1 = cy - iy0
+            wx0 = 1.0 - wx1
+            wy0 = 1.0 - wy1
+
+            z2 = float(Z * Z)
+            for dx, dy, w in [(0, 0, wx0 * wy0), (1, 0, wx1 * wy0),
+                              (0, 1, wx0 * wy1), (1, 1, wx1 * wy1)]:
+                if w <= 0:
+                    continue
+                px = (ix0 + dx) % nx
+                py = (iy0 + dy) % ny
+                img[py, px] += z2 * w
+
+        img = gaussian_filter(img, sigma=sigma_px, mode='wrap')
+
+        heavy = sum(1 for z in atoms.numbers if z > 8)
+        print(f"  [FAST] cell={a_len:.1f}x{b_len:.1f}A  grid={nx}x{ny}  "
+              f"{len(atoms)} atoms ({heavy} heavy)  sigma={sigma_px:.1f}px")
+
+        img_norm = self._normalize_image(img)
+        pil_img = Image.fromarray(img_norm)
+        pil_img = pil_img.resize((image_size, image_size), Image.LANCZOS)
+        pil_img.save(out_path)
+
+    # ------------------------------------------------------------------
     # Placeholder engine
     # ------------------------------------------------------------------
 
@@ -284,6 +414,16 @@ class STEMSimulator:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _sim_filename(slab: dict) -> str:
+        """Build output filename for a slab including termination info."""
+        mat_id = slab["material_id"]
+        hkl_str = "".join(str(i) for i in slab["miller_index"])
+        ti = slab.get("termination_index", 0)
+        if ti > 0:
+            return f"{mat_id}_{hkl_str}_t{ti}_HAADF.png"
+        return f"{mat_id}_{hkl_str}_HAADF.png"
 
     @staticmethod
     def _ensure_orthogonal_cell(atoms, max_repetitions: int = 5):

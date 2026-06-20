@@ -17,7 +17,7 @@ from gui.candidate_view import CandidateView, StructureViewer
 from gui.simulation_view import SimulationView
 from gui.comparison_view import ComparisonView
 from gui.dialogs import AdvancedSettingsDialog
-from gui.worker import RetrieveWorker, SlabWorker, SimulateWorker
+from gui.worker import RetrieveWorker, SlabWorker, FastProjectWorker, SimulateWorker
 from src.reporter import Reporter
 
 
@@ -68,7 +68,8 @@ class MSBatchMainWindow(QMainWindow):
 
     def _connect_signals(self):
         self.sidebar.retrieve_clicked.connect(self._on_retrieve)
-        self.sidebar.simulate_clicked.connect(self._on_simulate)
+        self.sidebar.preview_clicked.connect(self._on_preview)
+        self.sidebar.full_simulate_clicked.connect(self._on_full_simulate)
         self.sidebar.cancel_clicked.connect(self._on_cancel)
         self.sidebar.advanced_clicked.connect(self._on_advanced_settings)
         self.sidebar.experiment_image_dropped.connect(
@@ -94,7 +95,8 @@ class MSBatchMainWindow(QMainWindow):
             elements=params.get("elements"),
             formula=params.get("formula"),
             stoichiometry=params.get("stoichiometry"),
-            max_candidates=params.get("max_candidates", 50)
+            max_candidates=params.get("max_candidates", 50),
+            database=params.get("database", "MP")
         )
         self._retrieve_worker.candidates_ready.connect(self._on_candidates_ready)
         self._retrieve_worker.error_occurred.connect(self._on_error)
@@ -109,7 +111,8 @@ class MSBatchMainWindow(QMainWindow):
         self.status_bar.showMessage(f"Retrieved {n} candidates")
         self.tabs.setCurrentIndex(0)
 
-    def _on_simulate(self):
+    def _on_preview(self):
+        """Stage A: generate slabs then fast Z² projection (seconds total)."""
         if not self._candidates:
             return
 
@@ -121,7 +124,7 @@ class MSBatchMainWindow(QMainWindow):
                                 "Please select at least one candidate.")
             return
 
-        self.sidebar.set_simulating(True)
+        self.sidebar.set_previewing(True)
         self.status_bar.showMessage("Generating slabs...")
 
         miller_text = self.sidebar.miller_input.text().strip()
@@ -141,20 +144,58 @@ class MSBatchMainWindow(QMainWindow):
 
         self._slab_worker = SlabWorker(
             filtered, miller_indices=user_indices,
+            max_rank=len(selected),  # cover all user-selected candidates, not just top-20
             output_dir=output_dir
         )
-        self._slab_worker.slabs_ready.connect(self._on_slabs_ready)
+        self._slab_worker.slabs_ready.connect(self._on_slabs_ready_for_preview)
         self._slab_worker.error_occurred.connect(self._on_error)
         self._slab_worker.start()
 
-    def _on_slabs_ready(self, manifest):
+    def _on_slabs_ready_for_preview(self, manifest):
         self._slab_manifest = manifest
         n = len(manifest["slabs"])
-        self.status_bar.showMessage(f"Generated {n} slabs. Starting simulation...")
+        self.status_bar.showMessage(f"Generated {n} slabs. Running fast projection...")
 
-        self._sim_worker = SimulateWorker(
+        self._fast_worker = FastProjectWorker(
             manifest, output_dir=self._output_dir,
             config=self._sim_config
+        )
+        self._fast_worker.progress_update.connect(self.sidebar.set_progress)
+        self._fast_worker.projections_done.connect(self._on_projections_ready)
+        self._fast_worker.error_occurred.connect(self._on_error)
+        self._fast_worker.start()
+
+    def _on_projections_ready(self, manifest):
+        """Fast projections complete — show preview with checkboxes."""
+        self._sim_manifest = manifest
+        self.simulation_view.populate(manifest, selectable=True)
+        self.comparison_view.set_sim_images(manifest)
+        self.sidebar.set_previewing(False)
+        self.sidebar.show_full_sim_button()
+        n = len(manifest.get("simulations", []))
+        self.status_bar.showMessage(
+            f"Preview ready: {n} images. Check boxes and click 'Full Simulate Selected' "
+            f"for high-accuracy simulation."
+        )
+        self.tabs.setCurrentIndex(1)
+
+    def _on_full_simulate(self):
+        """Stage B: run full abTEM multislice only on checked preview images."""
+        if not self._slab_manifest:
+            return
+
+        selected = self.simulation_view.get_selected_indices()
+        if not selected:
+            QMessageBox.warning(self, "No Selection",
+                                "Please check at least one preview image for full simulation.")
+            return
+
+        self.sidebar.set_simulating(True)
+        self.status_bar.showMessage(f"Full simulation on {len(selected)} selected slab(s)...")
+
+        self._sim_worker = SimulateWorker(
+            self._slab_manifest, output_dir=self._output_dir,
+            config=self._sim_config, slab_indices=selected
         )
         self._sim_worker.progress_update.connect(self.sidebar.set_progress)
         self._sim_worker.simulation_done.connect(self._on_simulation_done)
@@ -162,12 +203,25 @@ class MSBatchMainWindow(QMainWindow):
         self._sim_worker.start()
 
     def _on_simulation_done(self, manifest):
-        self._sim_manifest = manifest
-        self.simulation_view.populate(manifest)
-        self.comparison_view.set_sim_images(manifest)
+        # Merge full sim results into preview manifest so unselected
+        # preview images don't disappear — they keep their fast-projection
+        # images while selected ones get replaced with full-quality output.
+        full_by_key = {}
+        for s in manifest["simulations"]:
+            key = (s["material_id"], tuple(s["miller_index"]))
+            full_by_key[key] = s
+
+        merged = {"simulations": []}
+        for s in (self._sim_manifest or {}).get("simulations", []):
+            key = (s["material_id"], tuple(s["miller_index"]))
+            merged["simulations"].append(full_by_key.get(key, s))
+
+        self._sim_manifest = merged
+        self.simulation_view.populate(merged)  # no checkboxes — final view
+        self.comparison_view.set_sim_images(merged)
         self.sidebar.set_simulating(False)
         n = len(manifest.get("simulations", []))
-        self.status_bar.showMessage(f"Completed {n} simulations")
+        self.status_bar.showMessage(f"Completed {n} full simulations")
         self.tabs.setCurrentIndex(1)
 
     def _on_advanced_settings(self):
@@ -206,15 +260,19 @@ class MSBatchMainWindow(QMainWindow):
             QMessageBox.information(self, "Done", f"Report saved:\n{path}")
 
     def _on_cancel(self):
-        if hasattr(self, "_sim_worker") and self._sim_worker.isRunning():
-            self._sim_worker.requestInterruption()
-            self._sim_worker.quit()
-            self._sim_worker.wait(3000)
+        for attr in ("_sim_worker", "_fast_worker", "_slab_worker"):
+            worker = getattr(self, attr, None)
+            if worker and worker.isRunning():
+                worker.requestInterruption()
+                worker.quit()
+                worker.wait(3000)
+        self.sidebar.set_previewing(False)
         self.sidebar.set_simulating(False)
-        self.status_bar.showMessage("Simulation cancelled")
+        self.status_bar.showMessage("Cancelled")
 
     def _on_error(self, msg):
         self.sidebar.set_retrieving(False)
+        self.sidebar.set_previewing(False)
         self.sidebar.set_simulating(False)
         self.status_bar.showMessage(f"Error: {msg}")
         QMessageBox.critical(self, "Error", msg)

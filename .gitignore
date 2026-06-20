@@ -32,3 +32,9 @@ Thumbs.db
 
 # User config
 .msbatch/
+
+# Github-only: exclude Claude config, tests, docs
+CLAUDE.md
+AGENTS.md
+tests/
+docs/

@@ -1,7 +1,9 @@
 """MSBatch default configuration."""
 
+import os
+
 # Materials Project API
-MP_API_KEY = "3sDGIETDr7oH5nrQ1UP4aSczKFXJHQcC"
+MP_API_KEY = os.environ.get("MP_API_KEY", "")
 
 # MP retrieval defaults
 DEFAULT_MAX_CANDIDATES = 20

@@ -35,10 +35,19 @@ class SlabBuilder:
         miller_indices: Optional[list[tuple[int, int, int]]] = None,
         user_indices: Optional[list[tuple[int, int, int]]] = None,
         max_rank: int = DEFAULT_MAX_SLAB_RANK,
+        max_terminations: int = 5,
         deduplicate_symmetrically: bool = True,
         output_dir: str | Path = ".",
     ) -> dict:
-        """Generate slabs and return manifest dict."""
+        """Generate slabs and return manifest dict.
+
+        Parameters
+        ----------
+        max_terminations : int
+            Maximum unique surface terminations per Miller index.
+            get_slabs() enumerates all possible cuts; for materials
+            with many layers this could produce dozens.  Default 5.
+        """
         if miller_indices is None:
             miller_indices = list(DEFAULT_MILLER_INDICES)
         if user_indices:
@@ -76,42 +85,59 @@ class SlabBuilder:
                         lll_reduce=False,
                         center_slab=True,
                     )
-                    # get_slab() returns first termination (fast).
-                    # get_slabs() enumerates ALL possible terminations (slow).
-                    slab = slab_gen.get_slab()
-                    if slab is None:
+                    # Enumerate ALL unique surface terminations so the
+                    # user can pick the one matching their experiment.
+                    # get_slabs() deduplicates equivalent shifts internally.
+                    all_slabs = slab_gen.get_slabs()
+                    if not all_slabs:
                         print(f"  [WARN] No slab for {mat_id} {hkl}")
                         continue
 
-                    # 扩展xy超胞使视场 ≥ min_xy_size
-                    a_len = np.linalg.norm(slab.lattice.matrix[0])
-                    b_len = np.linalg.norm(slab.lattice.matrix[1])
-                    rep_a = max(1, int(np.ceil(self.min_xy_size / a_len))) if a_len > 0 else 1
-                    rep_b = max(1, int(np.ceil(self.min_xy_size / b_len))) if b_len > 0 else 1
-                    slab.make_supercell([rep_a, rep_b, 1])
-                    new_a = np.linalg.norm(slab.lattice.matrix[0])
-                    new_b = np.linalg.norm(slab.lattice.matrix[1])
-                    heavy = sum(1 for s in slab if s.specie.Z > 8)
                     hkl_str = "".join(str(i) for i in hkl)
-                    print(f"  [SLAB] {mat_id} ({hkl_str}): {a_len:.1f}x{b_len:.1f} -> {new_a:.1f}x{new_b:.1f} A, {heavy} heavy atoms")
-                    cif_path = subdir / f"{mat_id}_{hkl_str}.cif"
-                    CifWriter(slab).write_file(str(cif_path))
 
-                    z_coords = [s.frac_coords[2] for s in slab]
-                    slab_height = (
-                        (max(z_coords) - min(z_coords)) * slab.lattice.c
-                        if z_coords else 0.0
-                    )
+                    for ti, slab in enumerate(all_slabs[:max_terminations]):
+                        if slab is None:
+                            continue
 
-                    slabs.append({
-                        "material_id": mat_id,
-                        "formula_pretty": formula,
-                        "miller_index": list(hkl),
-                        "cif_path": str(cif_path),
-                        "slab_thickness_A": round(slab.lattice.c, 2),
-                        "vacuum_A": round(slab.lattice.c - slab_height, 2),
-                        "supercell": [rep_a, rep_b, 1],
-                    })
+                        a_len = np.linalg.norm(slab.lattice.matrix[0])
+                        b_len = np.linalg.norm(slab.lattice.matrix[1])
+                        rep_a = max(1, int(np.ceil(self.min_xy_size / a_len))) if a_len > 0 else 1
+                        rep_b = max(1, int(np.ceil(self.min_xy_size / b_len))) if b_len > 0 else 1
+                        slab.make_supercell([rep_a, rep_b, 1])
+                        new_a = np.linalg.norm(slab.lattice.matrix[0])
+                        new_b = np.linalg.norm(slab.lattice.matrix[1])
+                        heavy = sum(1 for s in slab if s.specie.Z > 8)
+
+                        tag = f"t{ti}" if len(all_slabs) > 1 else ""
+                        print(f"  [SLAB] {mat_id} ({hkl_str}{tag}): "
+                              f"{a_len:.1f}x{b_len:.1f} -> {new_a:.1f}x{new_b:.1f} A, "
+                              f"{heavy} heavy atoms  [term {ti+1}/{min(len(all_slabs), max_terminations)}]")
+
+                        cif_name = f"{mat_id}_{hkl_str}{tag}.cif"
+                        cif_path = subdir / cif_name
+                        CifWriter(slab).write_file(str(cif_path))
+
+                        z_coords = [s.frac_coords[2] for s in slab]
+                        slab_height = (
+                            (max(z_coords) - min(z_coords)) * slab.lattice.c
+                            if z_coords else 0.0
+                        )
+
+                        slabs.append({
+                            "material_id": mat_id,
+                            "formula_pretty": formula,
+                            "miller_index": list(hkl),
+                            "termination_index": ti,
+                            "cif_path": str(cif_path),
+                            "slab_thickness_A": round(slab.lattice.c, 2),
+                            "vacuum_A": round(slab.lattice.c - slab_height, 2),
+                            "supercell": [rep_a, rep_b, 1],
+                        })
+
+                    if len(all_slabs) > max_terminations:
+                        print(f"  [SLAB] {mat_id} ({hkl_str}): "
+                              f"{len(all_slabs)} terminations found, showing first {max_terminations}")
+
                 except Exception as e:
                     print(f"  [WARN] Failed to slab {mat_id} {hkl}: {e}")
                     continue
