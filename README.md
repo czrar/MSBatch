@@ -2,7 +2,7 @@
 
 > 输入元素组成 → 自动检索晶体结构 → STEM 图像模拟 → 与实验图比对 → 确定未知结构
 
-**适用场景**：拿到一张 STEM-HAADF 原子像，知道样品含有哪些元素，但不清楚具体是哪种晶体结构/哪个晶面。MSBatch 帮你从 Materials Project 数据库（15 万+ 材料）检索候选结构，自动模拟 HAADF 图像，与实验图并排对比。
+**适用场景**：拿到一张 STEM-HAADF 原子像，知道样品含有哪些元素，但不清楚具体是哪种晶体结构/哪个晶面。MSBatch 帮你从 Materials Project（15 万+ DFT 计算结构）和 COD 晶体学数据库（50 万+ 实验测定结构）检索候选，自动模拟 HAADF 图像，与实验图并排对比。
 
 ---
 
@@ -27,7 +27,7 @@ python gui_main.py
 ### 第三步：使用流程
 
 1. **输入元素** — 左侧栏填入样品元素（如 `Li, Co, O`），可选填化学计量比、晶面
-2. **点击检索** — 自动从 Materials Project 搜索候选结构
+2. **点击检索** — 自动从 Materials Project / COD 搜索候选结构（可选 MP、COD 或两者）
 3. **浏览候选** — 卡片式展示，每张含晶体信息和 3D 结构缩略图，默认全选
 4. **开始模拟** — 自动切面并生成 STEM-HAADF 模拟图
 5. **上传实验图** — 与模拟图并排比对，确定最佳匹配
@@ -84,6 +84,7 @@ MSBatch/
 │
 ├── src/                         # 管道核心模块
 │   ├── retriever.py             #   Stage 1: Materials Project 检索
+│   ├── cod_retriever.py         #   Stage 1b: COD 晶体学数据库检索 (REST API)
 │   ├── slabber.py               #   Stage 2: 表面切面生成
 │   ├── simulator.py             #   Stage 3: STEM-HAADF 模拟 (abTEM)
 │   └── reporter.py              #   Stage 4: HTML 报告生成
@@ -149,7 +150,7 @@ A: 不需要。abTEM 使用 CPU（numba JIT），普通笔记本即可运行。
 | 界面 | PyQt6 |
 | 3D 结构 | py3Dmol + QWebEngineView |
 | 模拟引擎 | abTEM 1.0 (multislice + frozen phonon) |
-| 材料数据 | Materials Project API v2 (mp-api) |
+| 材料数据 | Materials Project API v2 (mp-api) + COD REST API |
 | 晶体学 | pymatgen |
 | 图像处理 | Pillow, NumPy, SciPy |
 
